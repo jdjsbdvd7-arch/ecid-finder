@@ -161,6 +161,17 @@ Honest notes: the store is **public** (URLs are unguessable — 96-bit job id + 
 | Vercel deployment alone | ✅ UI, UDID derivation, device report, job-token minting, Blob token route. ❌ Cannot sign by itself: Vercel functions have no long-running processes and no Rust signer — that is why a worker exists. Without `WORKER_PUBLIC_URL` the wizard shows a clear "worker not connected" banner. |
 | Worker on a **Vercel Sandbox** | ✅ Evaluated and works as a *temporary* host: Firecracker microVM (Ubuntu, Node), a public HTTPS URL for an exposed port (valid cert → iOS accepts the OTA link), outbound internet. The prebuilt `ecid-signer` binary runs there, and a probe with a dummy non-existent Apple ID got a real answer from Apple's GrandSlam (`-20101 account information entered incorrectly`) — i.e. anisette provisioning + TLS to Apple work from there. ⚠️ Limits: a sandbox has a hard lifetime (45 min here; 5 h max on higher plans), the URL changes every time, state is wiped, so it suits a test session, not a permanent service. Use a VPS/Docker for something durable. |
 
+### Live deployment checks (2026-10-11)
+
+Run against https://ecid-finder.vercel.app with the worker hosted in a Vercel Sandbox:
+
+- `/sideload.html` and `/api/config` respond (`blobEnabled: true`, `workerConfigured: true`).
+- `/api/blob-upload`: 401 without/with a tampered job token, 403 for another job's path / wrong extension / path outside `ipa/`, 405 for GET, 200 + client token for `ipa/<jobId>/<file>.ipa`. A real client upload succeeded; a `text/html` upload was refused by the Blob token.
+- Worker `/jobs/:id/ingest` pulled that Blob (HTTP 200, IPA validated, CORS header for the site origin); a non-Blob URL was refused (`host_not_allowed`).
+- `/api/blob-delete` removed the blob (public URL → 404 afterwards); `/api/blob-sweep` rejects calls without `CRON_SECRET`.
+- Headless Chrome drove the real wizard: ECID → job → file chosen → Blob upload → worker ingest → "IPA validated".
+- **Not verified:** an actual Apple ID login/2FA, device registration, signing and the on-device install (needs the account owner's Apple ID and an iPhone). A dummy-account probe only proves the signer reaches Apple's login endpoint through anisette.
+
 ### Needs infrastructure / interaction
 - **Anisette**: Apple requires "anisette" device headers. The signer uses `isideload`'s remote v3 provider. `isideload`'s own default (`https://ani.stikstore.app`) sits behind a Cloudflare challenge for datacenter IPs and failed from a Vercel Sandbox, so this repo defaults to the community server `https://ani.sidestore.io` (worked there). Community servers can disappear or throttle — for anything serious self-host [`anisette-v3-server`](https://github.com/Dadoum/anisette-v3-server) and set `ANISETTE_URL`. Note: a third-party anisette server sees your device-ID-like anisette provisioning traffic but never your Apple ID password (that goes to Apple only).
 - **Apple ID + 2FA**: a human must enter the password and the 2FA code each session (web form or terminal). There is no unattended mode and none should be added.

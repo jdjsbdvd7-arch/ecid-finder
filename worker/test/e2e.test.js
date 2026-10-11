@@ -9,6 +9,7 @@ const data = fs.mkdtempSync(path.join(os.tmpdir(), 'ecid-worker-'));
 process.env.ECID_WORKER_DATA = data;
 process.env.JOB_HMAC_SECRET = 'e2e-secret-0123456789abcdef0123';
 process.env.ECID_SIGNER_BIN = path.join(__dirname, 'fake-signer.js');
+try { fs.chmodSync(process.env.ECID_SIGNER_BIN, 0o755); } catch (_) {} // git mode bits may be lost on some checkouts
 process.env.ALLOWED_ORIGINS = 'https://ecid-finder.vercel.app';
 process.env.MAX_IPA_BYTES = String(5 * 1024 * 1024);
 process.env.ECID_TEST_ALLOW_LOOPBACK_INGEST = '1';
