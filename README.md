@@ -53,3 +53,10 @@ MIT
 5. Delete the temporary profiles afterward: Settings → General → VPN & Device Management.
 
 If install still fails before any result shortcut appears, check Stolen Device Protection and that the site is opened in **Safari** (not in-app browsers).
+
+## How it works (Profile Service)
+
+1. Safari downloads an unsigned **Profile Service** `.mobileconfig` (`PayloadContent` is a **dict** with `DeviceAttributes` then `URL` — same shape as getudid.co / Apple OTA Phase 1).
+2. On Install, iOS POSTs a CMS-signed plist to `/retrieve`.
+3. The server parses nested/flat dict keys (`UDID`, `ECID`, `CHALLENGE`, …) and responds with **HTTP 301** to `/result.html?t=…`.
+   Returning HTML/text or an unsigned WebClip Configuration causes «ملف التعريف غير صالح / Invalid Profile».

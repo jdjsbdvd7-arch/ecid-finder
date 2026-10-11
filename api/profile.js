@@ -15,53 +15,53 @@ function baseUrl(req) {
   return `${proto}://${host}`;
 }
 
-function uuid() {
-  return crypto.randomUUID().toUpperCase();
-}
-
 /**
- * Profile Service enrollment payload — structure matches Apple OTA samples and
- * working getudid.co / EmperorEarth/udid unsigned mobileconfigs.
- *
- * DeviceAttributes: stick to attrs known to return on consumer iOS.
- * ECID is returned by many devices (get-ecid.com era); DEVICE_NAME is omitted
- * (not in Apple's documented attribute list and can confuse install).
+ * Profile Service enrollment — dict structure matches working getudid.co /
+ * Apple OTA Phase-1 samples exactly:
+ * - DOCTYPE "-//Apple Inc//DTD PLIST 1.0//EN"
+ * - PayloadContent is a <dict> (NOT array)
+ * - Inside PayloadContent: DeviceAttributes array THEN URL (getudid order)
+ * - No Challenge (optional; omitting avoids type mismatch string vs data)
+ * - Outer keys in getudid order
+ * - Tab indentation (Apple / getudid style)
  */
-function buildMobileconfig(retrieveUrl, challenge) {
+function buildMobileconfig(retrieveUrl) {
+  const uuid = crypto.randomUUID().toUpperCase();
+  // Exact structural template used by public UDID/ECID Safari tools
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n` +
+    `<!DOCTYPE plist PUBLIC "-//Apple Inc//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n` +
     `<plist version="1.0">\n` +
-    `<dict>\n` +
-    `\t<key>PayloadContent</key>\n` +
     `\t<dict>\n` +
-    `\t\t<key>URL</key>\n` +
-    `\t\t<string>${retrieveUrl}</string>\n` +
-    `\t\t<key>DeviceAttributes</key>\n` +
-    `\t\t<array>\n` +
-    `\t\t\t<string>UDID</string>\n` +
-    `\t\t\t<string>PRODUCT</string>\n` +
-    `\t\t\t<string>VERSION</string>\n` +
-    `\t\t\t<string>ECID</string>\n` +
-    `\t\t</array>\n` +
-    `\t\t<key>Challenge</key>\n` +
-    `\t\t<string>${challenge}</string>\n` +
+    `\t\t<key>PayloadContent</key>\n` +
+    `\t\t<dict>\n` +
+    `\t\t\t<key>DeviceAttributes</key>\n` +
+    `\t\t\t<array>\n` +
+    `\t\t\t\t<string>UDID</string>\n` +
+    `\t\t\t\t<string>IMEI</string>\n` +
+    `\t\t\t\t<string>VERSION</string>\n` +
+    `\t\t\t\t<string>PRODUCT</string>\n` +
+    `\t\t\t\t<string>SERIAL</string>\n` +
+    `\t\t\t\t<string>ECID</string>\n` +
+    `\t\t\t</array>\n` +
+    `\t\t\t<key>URL</key>\n` +
+    `\t\t\t<string>${retrieveUrl}</string>\n` +
+    `\t\t</dict>\n` +
+    `\t\t<key>PayloadOrganization</key>\n` +
+    `\t\t<string>ecid-finder.vercel.app</string>\n` +
+    `\t\t<key>PayloadDisplayName</key>\n` +
+    `\t\t<string>ECID Finder</string>\n` +
+    `\t\t<key>PayloadIdentifier</key>\n` +
+    `\t\t<string>app.ecidfinder.profile-service</string>\n` +
+    `\t\t<key>PayloadDescription</key>\n` +
+    `\t\t<string>Install this temporary profile to find and display your device ECID and UDID. Remove it after viewing the result.</string>\n` +
+    `\t\t<key>PayloadType</key>\n` +
+    `\t\t<string>Profile Service</string>\n` +
+    `\t\t<key>PayloadUUID</key>\n` +
+    `\t\t<string>${uuid}</string>\n` +
+    `\t\t<key>PayloadVersion</key>\n` +
+    `\t\t<integer>1</integer>\n` +
     `\t</dict>\n` +
-    `\t<key>PayloadDescription</key>\n` +
-    `\t<string>Temporary profile to read ECID and UDID. Remove it after viewing the result.</string>\n` +
-    `\t<key>PayloadDisplayName</key>\n` +
-    `\t<string>ECID Finder</string>\n` +
-    `\t<key>PayloadIdentifier</key>\n` +
-    `\t<string>app.ecidfinder.profile-service</string>\n` +
-    `\t<key>PayloadOrganization</key>\n` +
-    `\t<string>ecid-finder.vercel.app</string>\n` +
-    `\t<key>PayloadType</key>\n` +
-    `\t<string>Profile Service</string>\n` +
-    `\t<key>PayloadUUID</key>\n` +
-    `\t<string>${uuid()}</string>\n` +
-    `\t<key>PayloadVersion</key>\n` +
-    `\t<integer>1</integer>\n` +
-    `</dict>\n` +
     `</plist>\n`
   );
 }
@@ -76,9 +76,8 @@ module.exports = async function handler(req, res) {
 
   try {
     const origin = baseUrl(req);
-    const challenge = crypto.randomUUID();
     const retrieveUrl = `${origin}/retrieve`;
-    const body = buildMobileconfig(retrieveUrl, challenge);
+    const body = buildMobileconfig(retrieveUrl);
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/x-apple-aspen-config');
@@ -87,10 +86,6 @@ module.exports = async function handler(req, res) {
       'attachment; filename="ecid-finder.mobileconfig"'
     );
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader(
-      'Set-Cookie',
-      `ecid_chal=${challenge}; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=None`
-    );
     if (req.method === 'HEAD') {
       res.end();
       return;
