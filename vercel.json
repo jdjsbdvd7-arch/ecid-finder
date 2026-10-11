@@ -1,33 +1,100 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/profile", "destination": "/api/profile" },
-    { "source": "/retrieve", "destination": "/api/retrieve" }
+    {
+      "source": "/profile",
+      "destination": "/api/profile"
+    },
+    {
+      "source": "/retrieve",
+      "destination": "/api/retrieve"
+    },
+    {
+      "source": "/sideload",
+      "destination": "/sideload.html"
+    }
   ],
   "headers": [
     {
+      "source": "/api/blob-(upload|delete|sweep)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
       "source": "/api/profile",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/api/retrieve",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/api/firmwares",
       "headers": [
-        { "key": "Cache-Control", "value": "public, s-maxage=300, stale-while-revalidate=600" }
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=300, stale-while-revalidate=600"
+        }
       ]
     },
     {
       "source": "/api/device-report",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
+    },
+    {
+      "source": "/api/(jobs|udid|config)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/sideload.html",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/blob-sweep",
+      "schedule": "0 3 * * *"
     }
   ]
 }
