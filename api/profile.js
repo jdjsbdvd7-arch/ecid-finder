@@ -5,7 +5,9 @@ function baseUrl(req) {
     return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
   }
   const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || '')
+    .split(',')[0]
+    .trim();
   if (!host) {
     if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
     throw new Error('Cannot determine public base URL');
@@ -14,46 +16,55 @@ function baseUrl(req) {
 }
 
 function uuid() {
-  return crypto.randomUUID();
+  return crypto.randomUUID().toUpperCase();
 }
 
+/**
+ * Build Profile Service .mobileconfig matching working open-source examples
+ * (getudid.co, shaojiankui/iOS-UDID-Safari, Apple OTA ConfigurationProfileExamples).
+ * Signing is NOT required for structural validity; unsigned shows a warning.
+ */
 function buildMobileconfig(retrieveUrl, challenge) {
-  // Privacy-minimal DeviceAttributes (no IMEI/ICCID/SERIAL)
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadContent</key>
-  <dict>
-    <key>URL</key>
-    <string>${retrieveUrl}</string>
-    <key>DeviceAttributes</key>
-    <array>
-      <string>UDID</string>
-      <string>ECID</string>
-      <string>PRODUCT</string>
-      <string>VERSION</string>
-    </array>
-    <key>Challenge</key>
-    <string>${challenge}</string>
-  </dict>
-  <key>PayloadOrganization</key>
-  <string>ECID Finder</string>
-  <key>PayloadDisplayName</key>
-  <string>ECID Finder (Temporary)</string>
-  <key>PayloadIdentifier</key>
-  <string>app.ecid-finder.profile-service</string>
-  <key>PayloadDescription</key>
-  <string>Temporary Profile Service profile. Install in Safari to read ECID/UDID/PRODUCT/VERSION, then remove it from Settings → General → VPN &amp; Device Management.</string>
-  <key>PayloadType</key>
-  <string>Profile Service</string>
-  <key>PayloadUUID</key>
-  <string>${uuid()}</string>
-  <key>PayloadVersion</key>
-  <integer>1</integer>
-</dict>
-</plist>
-`;
+  // Structure mirrors Apple's Phase-1 Profile Service sample and getudid.co.
+  // DeviceAttributes: documented attrs + ECID (returned by many devices / getudid).
+  // Challenge is optional but lets us correlate the response.
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n` +
+    `<plist version="1.0">\n` +
+    `<dict>\n` +
+    `\t<key>PayloadContent</key>\n` +
+    `\t<dict>\n` +
+    `\t\t<key>URL</key>\n` +
+    `\t\t<string>${retrieveUrl}</string>\n` +
+    `\t\t<key>DeviceAttributes</key>\n` +
+    `\t\t<array>\n` +
+    `\t\t\t<string>UDID</string>\n` +
+    `\t\t\t<string>ECID</string>\n` +
+    `\t\t\t<string>PRODUCT</string>\n` +
+    `\t\t\t<string>VERSION</string>\n` +
+    `\t\t\t<string>DEVICE_NAME</string>\n` +
+    `\t\t</array>\n` +
+    `\t\t<key>Challenge</key>\n` +
+    `\t\t<string>${challenge}</string>\n` +
+    `\t</dict>\n` +
+    `\t<key>PayloadOrganization</key>\n` +
+    `\t<string>ecid-finder.vercel.app</string>\n` +
+    `\t<key>PayloadDisplayName</key>\n` +
+    `\t<string>ECID Finder</string>\n` +
+    `\t<key>PayloadVersion</key>\n` +
+    `\t<integer>1</integer>\n` +
+    `\t<key>PayloadUUID</key>\n` +
+    `\t<string>${uuid()}</string>\n` +
+    `\t<key>PayloadIdentifier</key>\n` +
+    `\t<string>app.ecidfinder.profile-service</string>\n` +
+    `\t<key>PayloadDescription</key>\n` +
+    `\t<string>Temporary profile to read ECID and UDID. Remove it after viewing the result.</string>\n` +
+    `\t<key>PayloadType</key>\n` +
+    `\t<string>Profile Service</string>\n` +
+    `</dict>\n` +
+    `</plist>\n`
+  );
 }
 
 module.exports = async function handler(req, res) {
@@ -66,18 +77,15 @@ module.exports = async function handler(req, res) {
 
   try {
     const origin = baseUrl(req);
-    const challenge = uuid();
-    const retrieveUrl = `${origin}/api/retrieve`;
+    const challenge = crypto.randomUUID();
+    // Use /retrieve rewrite path (no /api) — some older notes prefer extension-less URLs
+    const retrieveUrl = `${origin}/retrieve`;
     const body = buildMobileconfig(retrieveUrl, challenge);
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/x-apple-aspen-config');
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="ecid-finder.mobileconfig"'
-    );
+    res.setHeader('Content-Disposition', 'attachment; filename="ecid-finder.mobileconfig"');
     res.setHeader('Cache-Control', 'no-store');
-    // Help Safari associate the challenge if cookies work during install
     res.setHeader(
       'Set-Cookie',
       `ecid_chal=${challenge}; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=None`
