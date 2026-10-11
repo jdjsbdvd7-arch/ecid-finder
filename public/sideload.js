@@ -257,13 +257,33 @@
       team_failed: 'لا يوجد فريق مطوّر لهذا الحساب · No developer team on this account.',
       register_device_failed: 'تعذّر تسجيل الجهاز (الحد 3 أجهزة؟ UDID غير صحيح؟) · Could not register the device (3-device limit? wrong UDID?).',
       sign_failed: 'فشل إنشاء الشهادة/App ID/التوقيع (حد الشهادات؟ حد App IDs؟) · Certificate / App ID / signing failed (cert or App ID limit?).',
+      bad_bundle_id: 'معرّف الحزمة المخصص غير صالح أو محجوز (com.apple.* غير مسموح) · The custom bundle ID is invalid or reserved (com.apple.* is not allowed).',
+      rewrite_failed: 'تعذّر تغيير معرّف الحزمة داخل الـ IPA · Could not rewrite the bundle ID inside the IPA.',
       anisette_init: 'تعذّر الوصول لخادم Anisette · Anisette server unreachable.',
     }[err.code];
-    return (t ? t + '\n' : '') + (err.message ? '[' + err.code + '] ' + err.message : '');
+    const appIdTaken = err.code === 'sign_failed' && /9400|is not available/.test(err.message || '')
+      ? 'معرّف التطبيق (App ID) غير متاح لحسابك. جرّب إعادة التوقيع (سيُختار معرّف جديد تلقائياً) أو اكتب Bundle ID خاصاً بك في الخانة أعلاه. · The App ID is not available to your account. Retry (a new unique ID is picked automatically) or enter your own bundle ID above.\n'
+      : '';
+    return appIdTaken + (t && !appIdTaken ? t + '\n' : '') + (err.message ? '[' + err.code + '] ' + err.message : '');
+  }
+
+  function renderRewrite(j) {
+    const el = $('rewriteNote');
+    const r = j.bundleRewrite;
+    if (!r || !r.to) { show(el, false); return; }
+    const why = {
+      reserved: ['معرّف التطبيق محجوز لشركة Apple (com.apple.*) ولا يمكن تسجيله في حساب مجاني، فغيّرناه تلقائياً.', 'The app\'s ID is reserved by Apple (com.apple.*) and cannot be registered on a free account, so it was changed automatically.'],
+      unavailable: ['Apple رفضت معرّف التطبيق (غير متاح)، فجرّبنا معرّفاً فريداً آخر.', 'Apple rejected the app ID (not available), so another unique ID was tried.'],
+      override: ['تم توقيع التطبيق بالمعرّف الذي اخترته.', 'The app is being signed with the bundle ID you chose.'],
+    }[r.reason] || ['تم تغيير معرّف التطبيق.', 'The app ID was changed.'];
+    setText(el, `${why[0]} · ${why[1]}\n${r.from} → ${r.to}\nقد لا تعمل بعض الميزات المرتبطة بالمعرّف الأصلي (App Groups، Keychain المشترك). · Features tied to the original ID (app groups, shared keychain) may not work.`);
+    el.style.whiteSpace = 'pre-wrap';
+    show(el);
   }
 
   function apply(j) {
     renderTimeline(j);
+    renderRewrite(j);
     const err = $('signErr');
     if (j.status === 'error' && j.error) { setText(err, describeError(j.error)); err.style.whiteSpace = 'pre-wrap'; show(err); $('signBtn').disabled = false; stopPoll(); show($('tfaForm'), false); }
     else show(err, false);
@@ -295,10 +315,10 @@
     const password = $('applePw').value;
     $('signBtn').disabled = true;
     show($('signErr'), false);
-    const r = await api('POST', `/jobs/${job.jobId}/sign`, { email, password, confirm: $('ownConfirm').checked, maxCerts: $('revokeOk').checked ? 'revoke' : 'error' });
+    const r = await api('POST', `/jobs/${job.jobId}/sign`, { email, password, confirm: $('ownConfirm').checked, maxCerts: $('revokeOk').checked ? 'revoke' : 'error', bundleId: $('bundleIdIn').value.trim() || undefined });
     $('applePw').value = ''; // do not keep the password in the DOM
     if (r.status !== 202) {
-      const msg = { signer_not_built: 'عامل التوقيع غير مبني (ecid-signer) · Signer binary not built on the worker.', busy: 'العامل مشغول · Worker busy', rate_limited: 'محاولات كثيرة · Too many attempts', confirm_required: 'أكّد الملكية أولاً · Confirm ownership first', no_ipa: 'ارفع IPA أولاً · Upload an IPA first' }[r.json.error] || r.json.message || r.json.error || 'HTTP ' + r.status;
+      const msg = { signer_not_built: 'عامل التوقيع غير مبني (ecid-signer) · Signer binary not built on the worker.', busy: 'العامل مشغول · Worker busy', rate_limited: 'محاولات كثيرة · Too many attempts', confirm_required: 'أكّد الملكية أولاً · Confirm ownership first', no_ipa: 'ارفع IPA أولاً · Upload an IPA first', bad_bundle_id: 'معرّف الحزمة غير صالح أو محجوز · Invalid or reserved bundle ID' }[r.json.error] || r.json.message || r.json.error || 'HTTP ' + r.status;
       setText($('signErr'), msg); show($('signErr')); $('signBtn').disabled = false;
       return;
     }

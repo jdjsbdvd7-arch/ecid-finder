@@ -85,6 +85,9 @@
         <input id="appleId" class="value" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" required />
         <label class="label" for="applePw">Password</label>
         <input id="applePw" class="value" type="password" autocomplete="off" required />
+        <label class="label" for="bundleIdIn">Bundle ID مخصص (اختياري) · Custom bundle ID (optional)</label>
+        <input id="bundleIdIn" class="value" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100" placeholder="com.yourname.myapp" />
+        <p class="muted small">اتركه فارغاً: إن كان معرّف التطبيق محجوزاً (com.apple.*) أو غير متاح سنغيّره تلقائياً إلى معرّف فريد. · Leave empty: if the app's ID is reserved (com.apple.*) or unavailable, it is automatically changed to a unique one.</p>
         <label class="check"><input id="ownConfirm" type="checkbox" required /> أؤكد أن هذا حسابي وأن الـ IPA ملكي أو أملك حق استخدامه · I confirm this is my own Apple account and my own IPA</label>
         <label class="check"><input id="revokeOk" type="checkbox" /> إذا وصلتُ لحد الشهادات اسمح بإلغاء شهادات التطوير القديمة (قد يُبطل تطبيقات AltStore/SideStore الحالية) · If I hit the dev-certificate limit, allow revoking my existing development certificates</label>
         <button id="signBtn" class="btn" type="submit">تسجيل الدخول والتوقيع · Sign in &amp; sign</button>
@@ -101,6 +104,7 @@
 
       <ol id="timeline" class="timeline" hidden></ol>
       <div class="bar" id="signBar" hidden><div id="signFill"></div></div>
+      <p id="rewriteNote" class="notice" hidden></p>
       <p id="signErr" class="warn" hidden></p>
     </section>
 
