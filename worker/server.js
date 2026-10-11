@@ -91,6 +91,7 @@ function publicJob(job, req) {
     team: job.team || null,
     error: job.error || null,
     warnings: job.warnings || [],
+    bundleRewrite: job.bundleRewrite || null,
     expiresAt: job.expiresAt,
     twofa: l && l.twofa ? l.twofa : null,
   };
@@ -307,6 +308,13 @@ async function handleSign(req, res, jid) {
   const password = typeof body.password === 'string' ? body.password : '';
   if (!/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(email) || email.length > 254) return sendJson(res, 400, { ok: false, error: 'bad_email' });
   if (!password || password.length > 256) return sendJson(res, 400, { ok: false, error: 'bad_password' });
+  let customBundleId = '';
+  if (body.bundleId != null && String(body.bundleId).trim() !== '') {
+    customBundleId = String(body.bundleId).trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9.\-]{2,99}$/.test(customBundleId) || !customBundleId.includes('.') || /\.\.|\.$/.test(customBundleId) || /^com\.apple(\.|$)/i.test(customBundleId)) {
+      return sendJson(res, 400, { ok: false, error: 'bad_bundle_id', message: 'معرّف الحزمة غير صالح أو محجوز (com.apple.* غير مسموح) · Invalid or reserved bundle ID (com.apple.* not allowed).' });
+    }
+  }
   if (activeSigners() >= MAX_CONCURRENT_SIGN) return sendJson(res, 503, { ok: false, error: 'busy', message: 'Worker is busy; retry in a minute.' });
   const entry = store.live.get(jid) || { attempts: 0 };
   if (entry.runner) {
@@ -331,6 +339,7 @@ async function handleSign(req, res, jid) {
   job.stage = 'starting';
   job.progress = 0;
   job.error = null;
+  job.bundleRewrite = null;
   store.saveJob(job);
 
   const onEvent = (ev) => {
@@ -350,6 +359,14 @@ async function handleSign(req, res, jid) {
         break;
       case 'team':
         j.team = { id: ev.teamId, name: ev.name };
+        break;
+      case 'bundle_rewrite':
+        // App ID hygiene: reserved/unavailable bundle id was rewritten to a unique one before signing.
+        j.bundleRewrite = {
+          from: String(ev.from || '').slice(0, 155),
+          to: String(ev.to || '').slice(0, 155),
+          reason: ['reserved', 'unavailable', 'override'].includes(ev.reason) ? ev.reason : 'unavailable',
+        };
         break;
       case 'device_registered':
         j.deviceRegistered = true;
@@ -377,6 +394,7 @@ async function handleSign(req, res, jid) {
       ipa: path.join(store.jobDir(jid), 'upload.ipa'),
       out: outPath,
       maxCerts: body.maxCerts === 'revoke' ? 'revoke' : 'error',
+      bundleId: customBundleId || undefined,
       anisetteUrl: process.env.ANISETTE_URL || DEFAULT_ANISETTE_URL,
       stateDir: store.ANISETTE_DIR,
     },
@@ -405,6 +423,7 @@ async function handleSign(req, res, jid) {
         j.signedVersion = insp.info.build || insp.info.version || '1.0';
         j.signedTitle = insp.info.name;
         fs.rmSync(path.join(store.jobDir(jid), 'upload.ipa'), { force: true }); // original no longer needed
+        fs.rmSync(outPath + '.rewritten.ipa', { force: true });
       }
     } else if (j.status !== 'error') {
       j.status = 'error';
@@ -500,6 +519,7 @@ function handleOta(req, res, iid, what) {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Length', Buffer.byteLength(xml));
     return res.end(req.method === 'HEAD' ? undefined : xml);
   }
   if (what === 'app.ipa') {
@@ -573,6 +593,11 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const p = url.pathname;
     let m;
+    if (p.startsWith('/ota/') || p.startsWith('/i/')) {
+      // OTA access log (no secrets: install id redacted) to diagnose on-device install failures.
+      const t0 = Date.now();
+      res.on('finish', () => console.log(`[ota] ${new Date().toISOString()} ${req.method} ${p.replace(/^(\/(?:ota|i)\/)[A-Za-z0-9_-]+/, '$1<id>')} -> ${res.statusCode} range=${req.headers.range || '-'} ua=${String(req.headers['user-agent'] || '-').slice(0, 80)} ${Date.now() - t0}ms`));
+    }
     if (p === '/healthz') {
       return sendJson(res, 200, { ok: true, signer: signerAvailable(), https: baseUrl(req).startsWith('https://') });
     }

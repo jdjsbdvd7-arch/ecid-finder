@@ -241,8 +241,15 @@ See `.env.example`. Key ones: `JOB_HMAC_SECRET` (both sides), `RESULT_HMAC_SECRE
 
 ## Signer protocol (for contributors)
 
-`ecid-signer` reads one JSON line on stdin — `{email,password,udid,deviceName,ipa,out,maxCerts,anisetteUrl,stateDir}` — and prints JSON-line events (`stage`, `need_2fa`, `team`, `device_registered`, `progress`, `done`, `error`). 2FA replies are JSON lines on stdin: `{"action":"code","code":"123456"}` | `sms` | `devices` | `resend`. Only anisette device state is written to `stateDir`; no tokens, passwords or keys.
+`ecid-signer` reads one JSON line on stdin — `{email,password,udid,deviceName,ipa,out,maxCerts,anisetteUrl,stateDir,bundleId?}` — and prints JSON-line events (`stage`, `bundle_rewrite`, `need_2fa`, `team`, `device_registered`, `progress`, `done`, `error`). 2FA replies are JSON lines on stdin: `{"action":"code","code":"123456"}` | `sms` | `devices` | `resend`. Only anisette device state is written to `stateDir`; no tokens, passwords or keys.
 
 ## Legal / responsible use
 
 Use your own Apple account, your own devices and an IPA you are entitled to sign. Free-account limits are Apple's. This project is not affiliated with Apple; it drives the same developer-services endpoints Xcode uses (undocumented and subject to change) through open-source libraries (`isideload`, `apple-codesign`).
+
+
+## App ID / bundle identifier handling (Apple error 9400)
+
+isideload registers the App ID `<CFBundleIdentifier>.<TEAMID>` on the user's free Personal Team. If the IPA's identifier is in a namespace the team cannot own (`com.apple.*`, e.g. `com.apple.mobile.MobileHouseArrest`), Apple answers `DeveloperError(9400, "An App ID with Identifier '…' is not available")`. This is **unrelated to Apple root CAs / cdhash** — nothing is injected into the app for this.
+
+`ecid-signer` therefore rewrites the identifier **before** signing (the standard AltStore/SideStore approach): main app, app extensions and Watch app `Info.plist`s are changed consistently (`com.apple.mobile.Foo` → `com.ecidfinder.foo.<6 hex>`, deterministic so re-signing the same IPA reuses the same App ID instead of burning one of the 10 weekly App IDs). It also retries with another unique id if Apple still answers 9400/"not available". The user can force their own id with the optional *Custom bundle ID* field (`bundleId` in `/jobs/:id/sign`; `com.apple.*` is refused). The worker exposes the change as `job.bundleRewrite {from,to,reason}` (`reserved`/`unavailable`/`override`) and the wizard shows it in Arabic + English; the OTA manifest uses the signed IPA's final bundle id.

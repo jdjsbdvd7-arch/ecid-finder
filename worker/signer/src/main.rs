@@ -6,6 +6,8 @@
 //! Protocol: JSON lines. stdin: one `start` message, then optional `2fa` replies.
 //! stdout: events {"event": "..."}. Credentials live only in this process's memory.
 
+mod bundle_id;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -39,6 +41,9 @@ struct Start {
     /// directory for anisette device state ONLY (no credentials / tokens)
     #[serde(default, rename = "stateDir")]
     state_dir: Option<String>,
+    /// optional user-chosen bundle id to sign the app under
+    #[serde(default, rename = "bundleId")]
+    bundle_id: Option<String>,
 }
 
 fn default_name() -> String {
@@ -75,6 +80,36 @@ async fn main() {
     if !valid_udid(&start.udid) {
         fail("bad_udid", "UDID must look like 8hex-16hex or 40hex");
     }
+    // ---- App ID hygiene (before any network) -------------------------------------------
+    // Personal Teams cannot register com.apple.* identifiers (Apple error 9400). Rewrite the
+    // IPA's own identifier (main app + extensions + Watch) to a unique one under our prefix.
+    let source_ipa = PathBuf::from(&start.ipa);
+    let original_id = match bundle_id::read_main_id(&source_ipa) {
+        Ok(id) => id,
+        Err(e) => fail("bad_ipa", e),
+    };
+    let work_ipa = PathBuf::from(format!("{}.rewritten.ipa", start.out));
+    let mut current_ipa = source_ipa.clone();
+    let mut current_id = original_id.clone();
+    let wanted = match start.bundle_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(o) if bundle_id::valid_override(o) => Some((o.to_string(), "override")),
+        Some(_) => fail("bad_bundle_id", "The custom bundle ID is invalid or reserved (com.apple.* is not allowed)."),
+        None if bundle_id::is_reserved(&original_id) => Some((bundle_id::unique_id(&original_id, 0), "reserved")),
+        None => None,
+    };
+    if let Some((new_id, reason)) = wanted {
+        if new_id != original_id {
+            match bundle_id::rewrite_ipa(&source_ipa, &work_ipa, &original_id, &new_id) {
+                Ok(_) => {
+                    emit(json!({"event":"bundle_rewrite","from":original_id,"to":new_id,"reason":reason}));
+                    current_ipa = work_ipa.clone();
+                    current_id = new_id;
+                }
+                Err(e) => fail("rewrite_failed", format!("Could not rewrite the bundle identifier: {e}")),
+            }
+        }
+    }
+
     if let Err(e) = isideload::init() {
         eprintln!("init warning: {e:?}");
     }
@@ -168,30 +203,53 @@ async fn main() {
     emit(json!({"event":"device_registered","udid":start.udid}));
 
     emit(json!({"event":"stage","stage":"sign"}));
-    let progress = |p: f32| async move {
-        emit(json!({"event":"progress","value":p}));
+    let mut salt: u32 = 0;
+    let (signed_dir, _special) = loop {
+        let progress = |p: f32| async move {
+            emit(json!({"event":"progress","value":p}));
+        };
+        match sideloader
+            .sign_app(
+                current_ipa.clone(),
+                Some(team.clone()),
+                false,
+                Some(progress),
+                None,
+                Some(&start.udid),
+            )
+            .await
+        {
+            Ok(r) => break r,
+            Err(e) => {
+                let msg = format!("{e:?}");
+                let unavailable = msg.contains("9400") || msg.contains("is not available");
+                if unavailable && salt < 3 {
+                    // The (team-suffixed) App ID is taken / not ours: pick another unique id and retry.
+                    salt += 1;
+                    let new_id = bundle_id::unique_id(&original_id, salt);
+                    match bundle_id::rewrite_ipa(&source_ipa, &work_ipa, &original_id, &new_id) {
+                        Ok(_) => {
+                            emit(json!({"event":"bundle_rewrite","from":original_id,"to":new_id,"reason":"unavailable"}));
+                            current_ipa = work_ipa.clone();
+                            current_id = new_id;
+                            continue;
+                        }
+                        Err(re) => fail("rewrite_failed", format!("{re} / after: {msg}")),
+                    }
+                }
+                fail("sign_failed", msg)
+            }
+        }
     };
-    let (signed_dir, _special) = match sideloader
-        .sign_app(
-            PathBuf::from(&start.ipa),
-            Some(team.clone()),
-            false,
-            Some(progress),
-            None,
-            Some(&start.udid),
-        )
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => fail("sign_failed", format!("{e:?}")),
-    };
+    let _ = &current_id;
 
     emit(json!({"event":"stage","stage":"package"}));
     match zip_ipa(&signed_dir, Path::new(&start.out)) {
         Ok(()) => {}
         Err(e) => fail("package_failed", e),
     }
-    emit(json!({"event":"done","out":start.out,"teamId":team.team_id}));
+    let _ = std::fs::remove_file(&work_ipa);
+    emit(json!({"event":"done","out":start.out,"teamId":team.team_id,"bundleId":current_id}));
 }
 
 fn valid_udid(u: &str) -> bool {
