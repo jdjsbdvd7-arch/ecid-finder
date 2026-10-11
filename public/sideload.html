@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <title>تثبيت لاسلكي · Wireless install (own IPA)</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="card wide">
+    <h1>تثبيت IPA الخاص بك لاسلكياً · Install your own IPA wirelessly</h1>
+    <p class="lead">
+      أدخل ECID يدوياً، ارفع ملف IPA <strong>الخاص بك</strong>، سجّل الدخول بحساب Apple المجاني (جلسة مؤقتة)، ثم يُوقَّع التطبيق ويُثبَّت عبر رابط OTA.
+      <br /><span class="muted">Enter your ECID, upload <strong>your own</strong> IPA, sign in with your free Apple account (temporary session), then install over the air. This site never supplies IPAs.</span>
+    </p>
+
+    <div id="workerBanner" class="notice" hidden></div>
+
+    <!-- Step 1 -->
+    <section class="step" id="s1">
+      <h2><span class="num">1</span> الجهاز · Device (ECID → UDID)</h2>
+      <form id="deviceForm" autocomplete="off" class="panel">
+        <label class="label" for="ecid">ECID (decimal / hex / 0x…)</label>
+        <input id="ecid" class="value" required placeholder="0x1965E62213801E" inputmode="text" spellcheck="false" />
+        <p id="ecidNote" class="muted small" hidden></p>
+
+        <label class="label" for="product">الطراز · Model identifier (اختياري · optional)</label>
+        <input id="product" class="value" placeholder="iPhone14,3" list="models" spellcheck="false" />
+        <datalist id="models">
+          <option value="iPhone11,8"></option><option value="iPhone12,1"></option><option value="iPhone13,2"></option>
+          <option value="iPhone14,2"></option><option value="iPhone14,3"></option><option value="iPhone14,7"></option>
+          <option value="iPhone15,2"></option><option value="iPhone15,4"></option><option value="iPhone16,1"></option>
+          <option value="iPhone17,1"></option><option value="iPhone17,3"></option>
+        </datalist>
+
+        <label class="label" for="cpid">الشريحة · Chip (CPID)</label>
+        <select id="cpid" class="value"><option value="">— تلقائي من الطراز · auto from model —</option></select>
+
+        <label class="label" for="udidIn">UDID (اختياري · optional, 00008110-…)</label>
+        <input id="udidIn" class="value" placeholder="00008110-001965E62213801E" spellcheck="false" />
+
+        <label class="label" for="devName">اسم الجهاز · Device name</label>
+        <input id="devName" class="value" value="My iPhone" maxlength="40" />
+
+        <div class="udid-preview"><span class="label">UDID</span> <code id="udidPreview" class="value">—</code></div>
+        <p id="udidMsg" class="warn" hidden></p>
+        <p class="muted small">
+          الأجهزة A12 فأحدث فقط (iPhone XS وما بعده): UDID = <code>CPID-ECID</code>. الأجهزة الأقدم لها UDID من 40 خانة لا يمكن اشتقاقه من ECID.
+          <br />A12+ devices only: UDID = <code>CPID-ECID</code>. Older devices use a 40-hex UDID that cannot be derived.
+        </p>
+        <button id="createJob" class="btn" type="submit">متابعة · Continue</button>
+      </form>
+    </section>
+
+    <!-- Step 2 -->
+    <section class="step locked" id="s2">
+      <h2><span class="num">2</span> ملف IPA الخاص بك · Your IPA</h2>
+      <div class="panel">
+        <p class="muted small">
+          يُرفع مباشرةً من متصفحك إلى تخزين Vercel Blob المؤقت (بعنوان عشوائي غير قابل للتخمين)، يجلبه عامل التوقيع مرة واحدة ويتحقّق منه، ثم تُحذف نسخة Blob فوراً. لا نوفّر أي IPA.
+          <br />Uploaded directly from your browser to temporary Vercel Blob storage (random, unguessable URL); the signing worker fetches it once and validates it, then the Blob copy is deleted right away. We never provide IPAs.
+        </p>
+        <label class="drop" id="drop" for="ipaFile">
+          <input id="ipaFile" type="file" accept=".ipa,application/octet-stream" hidden />
+          <span id="dropText">اختر ملف .ipa أو اسحبه هنا · Choose or drop an .ipa</span>
+        </label>
+        <div class="bar" id="upBar" hidden><div id="upFill"></div></div>
+        <p id="upMsg" class="muted small" hidden></p>
+        <dl id="ipaMeta" class="meta" hidden></dl>
+        <ul id="ipaWarn" class="tips" hidden></ul>
+      </div>
+    </section>
+
+    <!-- Step 3 -->
+    <section class="step locked" id="s3">
+      <h2><span class="num">3</span> حساب Apple · Apple account (session only)</h2>
+      <form id="appleForm" class="panel" autocomplete="off">
+        <div class="notice">
+          <strong>جلسة مؤقتة فقط · Session only.</strong>
+          كلمة المرور تُرسل من متصفحك مباشرةً إلى عامل التوقيع ثم إلى Apple، وتبقى في ذاكرة العملية فقط ولا تُخزَّن ولا تُسجَّل. Vercel لا يستقبلها أبداً. استخدم حسابك أنت فقط.
+          <br /><span class="muted">Your password goes from your browser straight to the signing worker and on to Apple. It lives in process memory only — never stored or logged. Vercel never receives it. Use your own account only.</span>
+        </div>
+        <label class="label" for="appleId">Apple ID</label>
+        <input id="appleId" class="value" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+        <label class="label" for="applePw">Password</label>
+        <input id="applePw" class="value" type="password" autocomplete="off" required />
+        <label class="check"><input id="ownConfirm" type="checkbox" required /> أؤكد أن هذا حسابي وأن الـ IPA ملكي أو أملك حق استخدامه · I confirm this is my own Apple account and my own IPA</label>
+        <label class="check"><input id="revokeOk" type="checkbox" /> إذا وصلتُ لحد الشهادات اسمح بإلغاء شهادات التطوير القديمة (قد يُبطل تطبيقات AltStore/SideStore الحالية) · If I hit the dev-certificate limit, allow revoking my existing development certificates</label>
+        <button id="signBtn" class="btn" type="submit">تسجيل الدخول والتوقيع · Sign in &amp; sign</button>
+      </form>
+
+      <form id="tfaForm" class="panel" hidden autocomplete="off">
+        <h3>التحقق بخطوتين · Two-factor code</h3>
+        <p id="tfaInfo" class="muted small"></p>
+        <input id="tfaCode" class="value" inputmode="numeric" pattern="\d{4,8}" maxlength="8" autocomplete="one-time-code" placeholder="123456" />
+        <button class="btn" type="submit">إرسال الرمز · Submit code</button>
+        <button id="tfaSms" class="btn secondary" type="button">SMS</button>
+        <button id="tfaResend" class="btn secondary" type="button">إعادة إرسال · Resend</button>
+      </form>
+
+      <ol id="timeline" class="timeline" hidden></ol>
+      <div class="bar" id="signBar" hidden><div id="signFill"></div></div>
+      <p id="signErr" class="warn" hidden></p>
+    </section>
+
+    <!-- Step 4 -->
+    <section class="step locked" id="s4">
+      <h2><span class="num">4</span> التثبيت اللاسلكي · Wireless install</h2>
+      <div id="installBox" class="panel" hidden>
+        <p id="installWarn" class="warn" hidden></p>
+        <a id="itmsBtn" class="btn" href="#">تثبيت الآن (من Safari على الجهاز) · Install now (Safari on the device)</a>
+        <label class="label">افتح هذا الرابط على الجهاز · Open this link on the device</label>
+        <div class="row"><code id="installPage" class="value">—</code><button type="button" id="copyInstall">نسخ</button></div>
+        <ol class="steps">
+          <li>iOS 16+: فعّل وضع المطوّر: الإعدادات ← الخصوصية والأمان ← وضع المطوّر، ثم أعد التشغيل. · Enable Developer Mode and reboot.</li>
+          <li>بعد التثبيت: الإعدادات ← عام ← VPN وإدارة الجهاز ← ثق بحسابك. · Then trust your developer profile.</li>
+          <li>الحساب المجاني: صلاحية 7 أيام، حتى 3 تطبيقات و10 App IDs أسبوعياً. · Free account: 7 days, 3 apps, 10 App IDs/week.</li>
+        </ol>
+        <p class="muted small" id="installExp"></p>
+        <button id="wipeBtn" type="button" class="btn secondary">حذف الجلسة والملفات الآن · Delete session &amp; files now</button>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2>حالة الجهاز · Device status</h2>
+      <p class="muted small">تقرير مؤقت من ECID اليدوي (الشريحة، الإصدارات الموقّعة) · Temporary report from your manual ECID.</p>
+      <a id="reportLink" class="btn secondary" href="/manual.html">تقرير الجهاز · Device report</a>
+    </section>
+
+    <a class="btn secondary" href="/">ECID Finder</a>
+    <p class="foot">
+      ليس تابعاً لأبل. يعمل عبر خدمات المطوّرين نفسها التي يستخدمها Xcode لحسابك أنت. · Not affiliated with Apple. Uses the developer services Xcode uses, for your own account.
+      <a href="https://github.com/jdjsbdvd7-arch/ecid-finder#signing-worker">README</a>
+    </p>
+  </main>
+  <script src="/vendor/blob-client.js"></script>
+  <script src="/sideload.js"></script>
+</body>
+</html>
