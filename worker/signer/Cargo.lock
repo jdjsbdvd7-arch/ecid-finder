@@ -777,6 +777,7 @@ name = "ecid-signer"
 version = "0.1.0"
 dependencies = [
  "isideload",
+ "plist",
  "rustls",
  "serde",
  "serde_json",

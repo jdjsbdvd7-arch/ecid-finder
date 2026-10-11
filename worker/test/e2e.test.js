@@ -15,7 +15,7 @@ process.env.MAX_IPA_BYTES = String(5 * 1024 * 1024);
 process.env.ECID_TEST_ALLOW_LOOPBACK_INGEST = '1';
 
 const { server } = require('../server');
-const { makeIpa } = require('../../test/helpers');
+const { makeIpa, infoPlistXml } = require('../../test/helpers');
 const { parsePlist } = require('../../lib/plist-lite');
 
 let base;
@@ -78,6 +78,7 @@ test('full pipeline with test signer', async () => {
   assert.equal(job.team.id, 'TESTTEAM00');
   assert.ok(job.install.manifestUrl.includes('/ota/'));
   assert.equal(job.install.https, false); // local http: UI must warn
+  assert.equal(job.install.itms, `itms-services://?action=download-manifest&url=${job.install.manifestUrl}`); // raw, canonical
 
   // credentials never persisted
   const onDisk = fs.readFileSync(path.join(data, 'jobs', jobId, 'job.json'), 'utf8');
@@ -89,6 +90,8 @@ test('full pipeline with test signer', async () => {
   const man = await j('GET', `/ota/${iid}/manifest.plist`);
   assert.equal(man.status, 200);
   assert.match(man.headers.get('content-type'), /text\/xml/);
+  assert.equal(Number(man.headers.get('content-length')), Buffer.byteLength(man.text));
+  assert.ok(man.text.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist'));
   const parsed = parsePlist(man.text);
   assert.equal(parsed.items[0].metadata['bundle-identifier'], 'com.example.hello');
   assert.equal(parsed.items[0].assets[0].url, `${base}/ota/${iid}/app.ipa`);
@@ -96,11 +99,35 @@ test('full pipeline with test signer', async () => {
   assert.equal(ipa.status, 206);
   assert.equal(Buffer.from(await ipa.arrayBuffer()).toString('latin1').slice(0, 2), 'PK');
   assert.equal((await j('GET', `/ota/${'x'.repeat(30)}/app.ipa`)).status, 404);
-  assert.equal((await j('GET', `/i/${iid}`)).status, 200);
+  const page = await j('GET', `/i/${iid}`);
+  assert.equal(page.status, 200);
+  assert.ok(page.text.includes(`href="itms-services://?action=download-manifest&amp;url=${base}/ota/${iid}/manifest.plist"`));
 
   // delete wipes
   assert.equal((await j('DELETE', `/jobs/${jobId}`, { token })).status, 200);
   assert.equal((await j('GET', `/ota/${iid}/app.ipa`)).status, 404);
+});
+
+test('reserved com.apple.* bundle id: warned at upload, rewrite surfaced, OTA still works', async () => {
+  const mint = (await j('POST', '/api/jobs', { body: { ecid: '0x1965E62213801E', cpid: '8110' } })).json;
+  const { jobId, token } = mint;
+  let r = await j('PUT', `/jobs/${jobId}/ipa`, { token, body: makeIpa({ plist: infoPlistXml({ CFBundleIdentifier: 'com.apple.mobile.MobileHouseArrest.xxx' }) }), headers: { 'Content-Type': 'application/octet-stream' } });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  assert.equal(r.json.job.ipa.reservedBundleId, true);
+  assert.ok(r.json.job.warnings.some((w) => w.includes('com.apple') || w.includes('MobileHouseArrest')));
+  // reserved override refused
+  r = await j('POST', `/jobs/${jobId}/sign`, { token, body: { email: 'a@b.co', password: 'test-password', confirm: true, bundleId: 'com.apple.foo' } });
+  assert.equal(r.status, 400); assert.equal(r.json.error, 'bad_bundle_id');
+  r = await j('POST', `/jobs/${jobId}/sign`, { token, body: { email: 'a@b.co', password: 'test-password', confirm: true } });
+  assert.equal(r.status, 202);
+  await poll(jobId, token, (x) => x.stage === 'need_2fa');
+  await j('POST', `/jobs/${jobId}/2fa`, { token, body: { action: 'code', code: '123456' } });
+  const job = await poll(jobId, token, (x) => x.status === 'ready');
+  assert.equal(job.bundleRewrite.reason, 'reserved');
+  assert.equal(job.bundleRewrite.from, 'com.apple.mobile.MobileHouseArrest.xxx');
+  assert.ok(!job.bundleRewrite.to.startsWith('com.apple'));
+  assert.ok(job.install.manifestUrl.includes('/ota/'));
+  assert.equal((await j('GET', job.install.manifestUrl.replace(base, ''))).status, 200);
 });
 
 test('cors only for allowed origins; static + traversal', async () => {

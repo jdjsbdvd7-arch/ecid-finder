@@ -80,7 +80,53 @@ test('ota manifest + itms link', () => {
   const p = parsePlist(m);
   assert.equal(p.items[0].assets[0].url, 'https://x.test/a.ipa');
   assert.equal(p.items[0].metadata.title, 'T & Co');
-  assert.ok(installLink('https://x.test/m.plist').startsWith('itms-services://?action=download-manifest&url=https%3A%2F%2Fx.test'));
+  assert.equal(installLink('https://x.test/m.plist'), 'itms-services://?action=download-manifest&url=https://x.test/m.plist');
+});
+
+test('ota: canonical raw itms link (no double/over-encoding, no extras)', () => {
+  const url = 'https://sb-46chfe3u2ntk.vercel.run/ota/AbC_-123xyz/manifest.plist';
+  const link = installLink(url);
+  assert.equal(link, 'itms-services://?action=download-manifest&url=' + url);
+  assert.ok(!link.includes('%'));
+  assert.equal([...link.matchAll(/[?&]/g)].length, 2); // exactly ?action=...&url=...
+  assert.equal(link, link.trim());
+  // URLs that would corrupt the outer query string still get encoded (once)
+  assert.equal(installLink('https://x.test/m.plist?a=1&b=2'), 'itms-services://?action=download-manifest&url=' + encodeURIComponent('https://x.test/m.plist?a=1&b=2'));
+});
+
+test('ota: manifest is byte-for-byte the minimal canonical Apple manifest', () => {
+  const got = buildManifest({ ipaUrl: 'https://h.test/ota/id_1-2/app.ipa', bundleId: 'com.frizzlem.sideinstaller.X1', version: '1', title: 'SideInstaller' });
+  const want = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    '<dict>', '\t<key>items</key>', '\t<array>', '\t\t<dict>',
+    '\t\t\t<key>assets</key>', '\t\t\t<array>', '\t\t\t\t<dict>',
+    '\t\t\t\t\t<key>kind</key>', '\t\t\t\t\t<string>software-package</string>',
+    '\t\t\t\t\t<key>url</key>', '\t\t\t\t\t<string>https://h.test/ota/id_1-2/app.ipa</string>',
+    '\t\t\t\t</dict>', '\t\t\t</array>',
+    '\t\t\t<key>metadata</key>', '\t\t\t<dict>',
+    '\t\t\t\t<key>bundle-identifier</key>', '\t\t\t\t<string>com.frizzlem.sideinstaller.X1</string>',
+    '\t\t\t\t<key>bundle-version</key>', '\t\t\t\t<string>1</string>',
+    '\t\t\t\t<key>kind</key>', '\t\t\t\t<string>software</string>',
+    '\t\t\t\t<key>title</key>', '\t\t\t\t<string>SideInstaller</string>',
+    '\t\t\t</dict>', '\t\t</dict>', '\t</array>', '</dict>', '</plist>', '',
+  ].join('\n');
+  assert.equal(got, want);
+  assert.ok(!got.includes('\r'));
+  assert.ok(!/[ \t]+\n/.test(got)); // no trailing whitespace
+  assert.ok(got.endsWith('</plist>\n'));
+  assert.ok(!got.includes('<?xml version="1.0" encoding="UTF-8"?>\n\n'));
+});
+
+test('ota: manifest rejects dirty URLs and strips control chars from title', () => {
+  const base = { bundleId: 'com.a.b', version: '1', title: 'T' };
+  for (const bad of ['https://x.test/a.ipa?x=1', 'https://x.test/a.ipa#f', 'https://x.test/a .ipa', 'https://x.test/a.ipa\n', 'ftp://x.test/a.ipa', ' https://x.test/a.ipa'])
+    assert.throws(() => buildManifest({ ...base, ipaUrl: bad }), /bare http\(s\) URL/, bad);
+  const m = parsePlist(buildManifest({ ...base, ipaUrl: 'https://x.test/a.ipa', title: ' A\r\nB\u0000 ' }));
+  assert.equal(m.items[0].metadata.title, 'A  B');
+  assert.deepEqual(Object.keys(m.items[0].metadata), ['bundle-identifier', 'bundle-version', 'kind', 'title']);
+  assert.deepEqual(Object.keys(m.items[0]), ['assets', 'metadata']);
 });
 
 test('job tokens: sign, verify, tamper, expiry', () => {
