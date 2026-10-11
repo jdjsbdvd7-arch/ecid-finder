@@ -1,0 +1,13 @@
+{
+  "name": "ecid-finder-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Signing worker: IPA upload, Apple developer-services signing (via ecid-signer), OTA install hosting",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "cli": "node cli.js",
+    "build:signer": "cd signer && cargo build --release"
+  },
+  "dependencies": {}
+}
