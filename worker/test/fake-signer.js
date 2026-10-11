@@ -15,6 +15,10 @@ const next = () => new Promise((r) => (lines.length ? r(lines.shift()) : (waiter
 const emit = (o) => console.log(JSON.stringify(o));
 (async () => {
   const start = JSON.parse(await next());
+  const insp = await require('../../lib/ipa-inspect').inspectIpa(start.ipa);
+  const origId = insp.ok ? insp.info.bundleId : '';
+  if (start.bundleId) emit({ event: 'bundle_rewrite', from: origId, to: start.bundleId, reason: 'override' });
+  else if (/^com\.apple(\.|$)/i.test(origId)) emit({ event: 'bundle_rewrite', from: origId, to: 'com.ecidfinder.x.000000', reason: 'reserved' });
   emit({ event: 'stage', stage: 'apple_login' });
   if (start.password !== 'test-password') { emit({ event: 'error', code: 'apple_login_failed', message: 'bad password ' + start.password }); process.exit(2); }
   emit({ event: 'need_2fa', params: { unknown: false, sms: false, numbers: [] } });
