@@ -2,9 +2,19 @@
   "name": "ecid-finder",
   "version": "1.0.0",
   "private": true,
-  "description": "Safari Profile Service ECID finder (Apple OTA attribute request)",
+  "description": "ECID Finder: Safari Profile Service ECID finder + wireless install wizard for your own IPA",
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@vercel/blob": "^2.8.1"
+  },
+  "scripts": {
+    "test": "node --test test/ worker/test/e2e.test.js",
+    "worker": "node worker/server.js",
+    "build:client": "esbuild scripts/blob-client-entry.js --bundle --minify --format=iife --target=es2020 --outfile=public/vendor/blob-client.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
 }
