@@ -18,13 +18,13 @@
       ]
     },
     {
-      "source": "/profile",
+      "source": "/api/firmwares",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        { "key": "Cache-Control", "value": "public, s-maxage=300, stale-while-revalidate=600" }
       ]
     },
     {
-      "source": "/retrieve",
+      "source": "/api/device-report",
       "headers": [
         { "key": "Cache-Control", "value": "no-store" }
       ]
