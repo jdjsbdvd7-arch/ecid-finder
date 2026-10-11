@@ -1,5 +1,8 @@
 const { verifyToken } = require('../lib/token');
-const { normalizeEcid } = require('../lib/parse-device-response');
+const {
+  normalizeEcid,
+  ecidFromUdid,
+} = require('../lib/parse-device-response');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -29,7 +32,16 @@ module.exports = async function handler(req, res) {
   }
 
   const p = verified.payload;
-  const ecid = normalizeEcid(p.ecid);
+  let rawEcid = p.ecid || '';
+  let ecidSource = p.ecidSource || '';
+  if (!rawEcid && p.udid) {
+    const derived = ecidFromUdid(p.udid);
+    if (derived) {
+      rawEcid = derived;
+      ecidSource = 'udid';
+    }
+  }
+  const ecid = normalizeEcid(rawEcid);
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
@@ -38,6 +50,8 @@ module.exports = async function handler(req, res) {
       ok: true,
       ecidHex: ecid ? ecid.hex : '',
       ecidDecimal: ecid ? ecid.decimal : '',
+      ecidPadded16: ecid ? ecid.padded16 || '' : '',
+      ecidSource: ecidSource || (ecid ? 'attribute' : ''),
       udid: p.udid || '',
       product: p.product || '',
       version: p.version || '',

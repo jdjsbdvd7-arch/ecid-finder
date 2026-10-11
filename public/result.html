@@ -35,6 +35,7 @@
         <span class="label">VERSION</span>
         <code id="version" class="value"></code>
       </div>
+      <p id="ecidNote" class="lead hidden" style="margin-top:0.75rem;font-size:0.9rem;opacity:0.85"></p>
     </div>
 
     <p class="warn">
@@ -78,6 +79,14 @@
         document.getElementById('panel').classList.remove('hidden');
         for (const id of ['ecidHex', 'ecidDecimal', 'udid', 'product', 'version']) {
           document.getElementById(id).textContent = data[id] || '—';
+        }
+        const note = document.getElementById('ecidNote');
+        if (data.ecidSource === 'udid') {
+          note.classList.remove('hidden');
+          note.textContent = 'ملاحظة: iOS لم يُرجع مفتاح ECID في DeviceAttributes؛ تم اشتقاقه من الجزء بعد الشرطة في UDID (صيغة الأجهزة الحديثة CHIP-ECID).';
+        } else if (data.ecidHex) {
+          note.classList.remove('hidden');
+          note.textContent = 'المصدر: خاصية ECID من Profile Service.';
         }
       } catch (e) {
         status.textContent = 'تعذر تحميل النتيجة.';
