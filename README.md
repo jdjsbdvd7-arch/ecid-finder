@@ -43,3 +43,12 @@ vercel --prod
 ## License
 
 MIT
+
+## How it works (fixed flow)
+
+1. Safari downloads a **Profile Service** `.mobileconfig` (`PayloadType = Profile Service`).
+2. On Install, iOS POSTs a CMS-signed attribute plist to `/retrieve`.
+3. The server parses the embedded XML and returns a **Configuration** profile with a removable **WebClip** to `/result.html?t=...` (not a bare HTML redirect — that caused *Invalid Profile*).
+4. Open the WebClip, copy ECID, then delete both profiles from Settings.
+
+Unsigned profiles are structurally valid; iOS only warns. Signing is optional polish.
