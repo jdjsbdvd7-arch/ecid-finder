@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ECID يدوي · Manual ECID report</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>تقرير من ECID يدوي · Manual ECID report</h1>
+    <p class="lead">
+      أدخل ECID بنفسك (عشري أو hex). لا يُخزَّن شيء على الخادم؛ القيم تنتقل في رابط التقرير فقط.
+      ECID وحده لا يكشف حالة الجهاز؛ أضف معرّف الطراز (مثل iPhone14,3) لعرض الإصدارات الموقّعة.
+      <br /><span class="muted">Nothing is stored. ECID alone does not reveal live device state; add the model identifier to see signed firmware.</span>
+    </p>
+
+    <form id="f" class="panel" autocomplete="off">
+      <label class="label" for="ecid">ECID (decimal / hex)</label>
+      <input id="ecid" class="value" required placeholder="0x1965E62213801E أو 7086034534957086" inputmode="text" />
+
+      <label class="label" for="cpid">CPID / UDID (اختياري · optional)</label>
+      <input id="cpid" class="value" placeholder="00008110-001965E62213801E أو 8110" />
+
+      <label class="label" for="product">Model identifier</label>
+      <input id="product" class="value" placeholder="iPhone14,3" list="models" />
+      <datalist id="models">
+        <option value="iPhone12,1"></option><option value="iPhone13,2"></option>
+        <option value="iPhone14,2"></option><option value="iPhone14,3"></option>
+        <option value="iPhone15,2"></option><option value="iPhone16,1"></option>
+        <option value="iPhone17,1"></option><option value="iPad13,16"></option>
+      </datalist>
+
+      <label class="label" for="version">Build (اختياري · optional)</label>
+      <input id="version" class="value" placeholder="24B5089g" />
+
+      <p id="err" class="warn" hidden></p>
+      <button class="btn" type="submit">عرض التقرير · Show report</button>
+    </form>
+
+    <a class="btn" href="/sideload.html">تثبيت IPA لاسلكياً · Wireless install (own IPA)</a>
+    <a class="btn secondary" href="/">ECID Finder</a>
+  </main>
+  <script>
+    function norm(raw) {
+      let s = String(raw).trim();
+      if (/^0x/i.test(s)) s = s.slice(2);
+      if (!/^[0-9a-fA-F]+$/.test(s)) return null;
+      const isHex = /[a-fA-F]/.test(s) || /^0x/i.test(raw.trim()) || s.length === 16;
+      try {
+        const v = isHex ? BigInt('0x' + s) : BigInt(s);
+        if (v <= 0n || v >= (1n << 64n)) return null;
+        return { hex: v.toString(16), dec: v.toString(10), pad: v.toString(16).padStart(16, '0') };
+      } catch (_) { return null; }
+    }
+    document.getElementById('f').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const err = document.getElementById('err');
+      const ecid = norm(document.getElementById('ecid').value);
+      if (!ecid) { err.hidden = false; err.textContent = 'ECID غير صالح · Invalid ECID'; return; }
+      err.hidden = true;
+      let udid = document.getElementById('cpid').value.trim();
+      if (/^[0-9a-fA-F]{1,8}$/.test(udid)) udid = udid.padStart(8, '0').toUpperCase() + '-' + ecid.pad.toUpperCase();
+      else if (udid && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{16}$/.test(udid)) udid = '';
+      const q = new URLSearchParams({
+        ecidHex: ecid.hex, ecidDecimal: ecid.dec, udid,
+        product: document.getElementById('product').value.trim(),
+        version: document.getElementById('version').value.trim(),
+        manual: '1',
+      });
+      location.href = '/report.html?' + q.toString();
+    });
+  </script>
+</body>
+</html>

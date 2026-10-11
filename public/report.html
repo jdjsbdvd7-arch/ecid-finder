@@ -65,6 +65,17 @@
       </section>
 
       <section class="section">
+        <h2>تسجيل وتثبيت لاسلكي · Register &amp; install over the air</h2>
+        <p class="lead" style="font-size:0.9rem;line-height:1.55">
+          من ECID + الشريحة نشتق UDID (A12 فأحدث)، ثم بجلسة Apple مؤقتة نسجّل الجهاز في فريقك المجاني (حتى 3 أجهزة، 7 أيام) ونوقّع IPA الخاص بك ونثبّته عبر رابط OTA.
+        </p>
+        <p class="muted" style="font-size:0.85rem;line-height:1.5;margin:0 0 10px">
+          From ECID + chip we derive the UDID (A12+), then with a temporary Apple session register it on your free team, sign your own IPA and install over the air. Needs the signing worker.
+        </p>
+        <a class="btn" href="/sideload.html">فتح معالج التثبيت · Open install wizard</a>
+      </section>
+
+      <section class="section">
         <h2>نصائح · Tips</h2>
         <ul id="tips" class="tips"></ul>
         <p class="muted" style="font-size:0.78rem;margin-top:10px;line-height:1.45">
@@ -96,12 +107,14 @@
       ecidHex: '1965e62213801e',
       ecidDecimal: '',
     };
+    const manual = params.get('manual') === '1';
+    const pick = (k) => params.get(k) || (manual ? '' : defaults[k]);
     const q = {
-      product: params.get('product') || defaults.product,
-      udid: params.get('udid') || defaults.udid,
-      version: params.get('version') || defaults.version,
-      ecidHex: params.get('ecidHex') || defaults.ecidHex,
-      ecidDecimal: params.get('ecidDecimal') || defaults.ecidDecimal,
+      product: pick('product'),
+      udid: pick('udid'),
+      version: pick('version'),
+      ecidHex: pick('ecidHex'),
+      ecidDecimal: pick('ecidDecimal'),
     };
 
     (async () => {
