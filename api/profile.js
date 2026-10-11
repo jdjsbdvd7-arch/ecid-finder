@@ -38,10 +38,8 @@ function buildMobileconfig(retrieveUrl) {
     `\t\t\t<key>DeviceAttributes</key>\n` +
     `\t\t\t<array>\n` +
     `\t\t\t\t<string>UDID</string>\n` +
-    `\t\t\t\t<string>IMEI</string>\n` +
     `\t\t\t\t<string>VERSION</string>\n` +
     `\t\t\t\t<string>PRODUCT</string>\n` +
-    `\t\t\t\t<string>SERIAL</string>\n` +
     `\t\t\t\t<string>ECID</string>\n` +
     `\t\t\t</array>\n` +
     `\t\t\t<key>URL</key>\n` +
