@@ -44,11 +44,12 @@ vercel --prod
 
 MIT
 
-## How it works (fixed flow)
+## Profile Service notes (iOS)
 
-1. Safari downloads a **Profile Service** `.mobileconfig` (`PayloadType = Profile Service`).
-2. On Install, iOS POSTs a CMS-signed attribute plist to `/retrieve`.
-3. The server parses the embedded XML and returns a **Configuration** profile with a removable **WebClip** to `/result.html?t=...` (not a bare HTML redirect — that caused *Invalid Profile*).
-4. Open the WebClip, copy ECID, then delete both profiles from Settings.
+1. Enrollment profile (`/profile`) is unsigned XML — Safari shows a warning; that is expected.
+2. On Install, iOS POSTs CMS (`application/pkcs7-signature`) to `/retrieve`.
+3. `/retrieve` **must** return a Configuration `.mobileconfig` (WebClip to the result page). Plain-text 400/500 causes «فشل تثبيت ملف التعريف / حاول العملية مرة أخرى».
+4. Body is read via Web Handler `request.arrayBuffer()` so Vercel helper parsing cannot destroy PKCS#7 bytes.
+5. Delete the temporary profiles afterward: Settings → General → VPN & Device Management.
 
-Unsigned profiles are structurally valid; iOS only warns. Signing is optional polish.
+If install still fails before any result shortcut appears, check Stolen Device Protection and that the site is opened in **Safari** (not in-app browsers).

@@ -48,6 +48,15 @@
     (async () => {
       const status = document.getElementById('status');
       const params = new URLSearchParams(location.search);
+      const err = params.get('error');
+      if (err === 'parse') {
+        status.textContent = 'وصل الطلب لكن تعذر قراءة بيانات الجهاز (body فارغ أو غير مفهوم). أعد المحاولة من Safari، وتأكد أن Stolen Device Protection لا يعيق التثبيت.';
+        return;
+      }
+      if (err === 'server') {
+        status.textContent = 'خطأ في الخادم أثناء المعالجة. أعد المحاولة بعد دقيقة.';
+        return;
+      }
       const t = params.get('t');
       if (!t) {
         status.textContent = 'لا يوجد رمز نتيجة. أعد التثبيت من الصفحة الرئيسية.';
