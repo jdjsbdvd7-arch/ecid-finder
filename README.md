@@ -67,3 +67,16 @@ On many modern iOS builds, the Profile Service response includes `UDID`, `PRODUC
 
 For devices using the post-2018 UDID format `XXXXXXXX-YYYYYYYYYYYYYYYY` (8 hex ChipID + hyphen + 16 hex ECID), this tool derives ECID from the UDID suffix when the attribute is missing — the same approach used by working ECID/UDID helper sites and documented on The iPhone Wiki.
 
+## Device Report (post-ECID)
+
+After a successful extract, `/result.html` loads a **Device Report**:
+
+- Marketing name (e.g. `iPhone14,3` → iPhone 13 Pro Max)
+- Chip from modern UDID prefix (`00008110` → A15 Bionic / T8110)
+- Build-id heuristics (`24B5089g` → likely Beta/Seed on iOS ~27.x B-train)
+- **Currently signed** restore firmwares via proxied [ipsw.me API](https://api.ipsw.me) (`/api/firmwares`, `/api/device-report`)
+- Practical bilingual tips (delete temp profile, beta instability, empty signing list)
+
+Demo without Profile Service token: [`/report.html`](https://ecid-finder.vercel.app/report.html) (defaults to a sample iPhone14,3).
+
+**Not included:** SHSH/TSS blob saving (nonce entanglement makes Safari-only SHSH weak on modern chips), iOS SDK downloads, or exploit tooling. Signing status is a research helper from a third-party API — not Apple-official advice.
