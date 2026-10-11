@@ -60,3 +60,10 @@ If install still fails before any result shortcut appears, check Stolen Device P
 2. On Install, iOS POSTs a CMS-signed plist to `/retrieve`.
 3. The server parses nested/flat dict keys (`UDID`, `ECID`, `CHALLENGE`, …) and responds with **HTTP 301** to `/result.html?t=…`.
    Returning HTML/text or an unsigned WebClip Configuration causes «ملف التعريف غير صالح / Invalid Profile».
+
+## Why ECID may be empty from Profile Service
+
+On many modern iOS builds, the Profile Service response includes `UDID`, `PRODUCT`, and `VERSION` but **omits** `ECID` even when it was listed in `DeviceAttributes`. Public libraries (e.g. udid-tools/core) document UDID/PRODUCT/VERSION/SERIAL/… and often not ECID.
+
+For devices using the post-2018 UDID format `XXXXXXXX-YYYYYYYYYYYYYYYY` (8 hex ChipID + hyphen + 16 hex ECID), this tool derives ECID from the UDID suffix when the attribute is missing — the same approach used by working ECID/UDID helper sites and documented on The iPhone Wiki.
+
