@@ -3,15 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>نتيجة ECID</title>
+  <title>نتيجة ECID · Device Report</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <main class="card">
-    <h1>نتيجة الجهاز</h1>
+    <h1>نتيجة الجهاز · Device Report</h1>
     <p id="status" class="lead">جاري التحقق من الرمز…</p>
 
     <div id="panel" class="panel hidden">
+      <div class="hero-device" id="hero">
+        <div class="hero-icon" aria-hidden="true">📱</div>
+        <div>
+          <h2 id="marketingName">—</h2>
+          <p class="hero-sub" id="heroSub">—</p>
+          <div class="badge-row" id="badges"></div>
+        </div>
+      </div>
+
       <div class="row">
         <span class="label">ECID (hex)</span>
         <code id="ecidHex" class="value"></code>
@@ -28,14 +37,39 @@
         <button type="button" data-copy="udid">نسخ</button>
       </div>
       <div class="row">
-        <span class="label">PRODUCT</span>
+        <span class="label">PRODUCT · المعرّف</span>
         <code id="product" class="value"></code>
       </div>
       <div class="row">
-        <span class="label">VERSION</span>
+        <span class="label">Build · VERSION</span>
         <code id="version" class="value"></code>
       </div>
+      <div class="row">
+        <span class="label">Chip · الشريحة</span>
+        <code id="chip" class="value"></code>
+      </div>
       <p id="ecidNote" class="lead hidden" style="margin-top:0.75rem;font-size:0.9rem;opacity:0.85"></p>
+
+      <section class="section" id="buildSection">
+        <h2>تحليل رقم البناء · Build decode</h2>
+        <p id="buildSummary" class="lead" style="margin-bottom:8px"></p>
+        <p id="buildDetail" class="muted" style="font-size:0.88rem;line-height:1.5;margin:0"></p>
+      </section>
+
+      <section class="section" id="fwSection">
+        <h2>إصدارات ما زالت موقّعة · Still signed</h2>
+        <p id="fwStatus" class="lead loading-dot">جاري جلب قائمة التوقيع من ipsw.me</p>
+        <ul id="fwList" class="fw-list"></ul>
+      </section>
+
+      <section class="section" id="tipsSection">
+        <h2>نصائح عملية · Practical tips</h2>
+        <ul id="tips" class="tips"></ul>
+        <p class="muted" style="font-size:0.78rem;margin-top:10px;line-height:1.45">
+          مساعد بحثي فقط · Research helper only — ليست نصيحة طبية/قانونية/رسمية من أبل.
+          Signing status is from a public third-party API and can change.
+        </p>
+      </section>
     </div>
 
     <p class="warn">
@@ -46,8 +80,175 @@
     <a class="btn secondary" href="/">عودة</a>
   </main>
   <script>
+    function el(id) { return document.getElementById(id); }
+
+    function fmtBytes(n) {
+      if (!n || !Number.isFinite(n)) return '';
+      const gb = n / (1024 ** 3);
+      return gb >= 1 ? gb.toFixed(2) + ' GB' : (n / (1024 ** 2)).toFixed(0) + ' MB';
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch (_) { return iso; }
+    }
+
+    function renderBadges(device) {
+      const box = el('badges');
+      box.innerHTML = '';
+      const add = (text, cls) => {
+        const s = document.createElement('span');
+        s.className = 'badge' + (cls ? ' ' + cls : '');
+        s.textContent = text;
+        box.appendChild(s);
+      };
+      if (device.chip && device.chip.name) add(device.chip.name, 'chip');
+      if (device.build && device.build.ok) {
+        if (device.build.kind === 'beta_or_seed') add('Beta / Seed', 'beta');
+        else add('Release-like', 'ok');
+        if (device.build.iosMajor) add('iOS ~' + device.build.iosMajor);
+      }
+    }
+
+    function renderTips(device, fwMeta, signedCount) {
+      const tips = el('tips');
+      tips.innerHTML = '';
+      const add = (ar, en, cls) => {
+        const li = document.createElement('li');
+        if (cls) li.className = cls;
+        li.innerHTML =
+          '<div class="bilingual"><span>' + ar + '</span><span class="en">' + en + '</span></div>';
+        tips.appendChild(li);
+      };
+
+      add(
+        'احذف ملف التعريف المؤقت من الإعدادات ← عام ← VPN وإدارة الجهاز بعد النسخ.',
+        'Delete the temporary configuration profile after copying your values.',
+        'warn-tip'
+      );
+
+      if (device.build && device.build.ok && device.build.kind === 'beta_or_seed') {
+        add(
+          'رقم البناء يبدو تجريبياً (Beta/Seed). قد تواجه عدم استقرار أو تطبيقات لا تعمل كما في الإصدار العام.',
+          'Build looks like Developer Beta/Seed — expect instability vs public releases.',
+          'warn-tip'
+        );
+      }
+
+      if (fwMeta && fwMeta.ok) {
+        if (signedCount === 0) {
+          add(
+            'لم تُرجع الواجهة أي إصدار موقّع حالياً لهذا الجهاز. قد تكون القائمة فارغة مؤقتاً أو تغيّر التوقيع.',
+            'No currently-signed restore firmwares returned for this product.',
+            'warn-tip'
+          );
+        } else {
+          add(
+            'يمكنك الاستعادة عبر Finder/iTunes فقط إلى إصدار ما زال أبل توقّعه. القائمة أدناه من مصدر عام وقد تتأخر.',
+            'You can restore via Finder/iTunes only to builds Apple still signs. List is third-party and may lag.',
+            'ok-tip'
+          );
+        }
+      } else {
+        add(
+          'تعذر جلب حالة التوقيع الآن. أعد التحميل لاحقاً أو تحقق من ipsw.me يدوياً.',
+          'Could not fetch signing status right now. Retry later or check ipsw.me manually.',
+          'warn-tip'
+        );
+      }
+
+      if (device.ecidHex) {
+        add(
+          'ECID مفيد لتعريف الجهاز في أدوات البحث/الاستعادة؛ لا تشاركه علناً مع بيانات حساسة أخرى بلا داعٍ.',
+          'ECID identifies the silicon for research/restore tooling — avoid posting it with other sensitive data.',
+          'ok-tip'
+        );
+      }
+    }
+
+    async function loadReport(data) {
+      const qs = new URLSearchParams({
+        product: data.product || '',
+        udid: data.udid || '',
+        version: data.version || '',
+        ecidHex: data.ecidHex || '',
+        ecidDecimal: data.ecidDecimal || '',
+      });
+      const res = await fetch('/api/device-report?' + qs.toString(), { cache: 'no-store' });
+      const report = await res.json();
+      if (!report.ok) throw new Error('report_failed');
+
+      const d = report.device;
+      el('marketingName').textContent = d.marketingName || d.product || '—';
+      el('heroSub').textContent =
+        (d.product || '—') +
+        (d.chip && d.chip.name ? ' · ' + d.chip.name : '') +
+        (d.version ? ' · ' + d.version : '');
+      el('chip').textContent = d.chip
+        ? d.chip.name + (d.chip.soc ? ' (' + d.chip.soc + ')' : '') +
+          (d.chip.prefix ? ' · UDID chip ' + d.chip.prefix : '')
+        : '—';
+      renderBadges(d);
+
+      if (d.build && d.build.ok) {
+        el('buildSummary').textContent =
+          d.build.kindAr + ' · ' + d.build.iosHintAr;
+        el('buildDetail').textContent =
+          d.build.raw +
+          ' → major ' + d.build.major +
+          ', train ' + d.build.train +
+          ', rev ' + d.build.revision +
+          (d.build.seedLetter ? ', seed ' + d.build.seedLetter : '') +
+          '. ' + d.build.trainHintEn + '. ' + d.build.kindEn;
+      } else {
+        el('buildSummary').textContent = 'تعذر تفكيك رقم البناء · Could not decode build id';
+        el('buildDetail').textContent = d.version || '—';
+      }
+
+      const fwStatus = el('fwStatus');
+      const fwList = el('fwList');
+      fwList.innerHTML = '';
+      if (report.firmwareMeta && report.firmwareMeta.ok) {
+        const signed = report.signedFirmwares || [];
+        if (!signed.length) {
+          fwStatus.className = 'lead';
+          fwStatus.textContent = 'لا توجد إصدارات موقّعة في الرد الحالي · No signed builds in current response';
+        } else {
+          fwStatus.className = 'lead';
+          fwStatus.textContent =
+            'حالياً موقّع للاستعادة: ' + signed.length +
+            ' · Currently signed for restore: ' + signed.length +
+            (report.firmwareMeta.name ? ' · ' + report.firmwareMeta.name : '');
+          for (const f of signed) {
+            const li = document.createElement('li');
+            li.className = 'fw-item';
+            const metaBits = [fmtDate(f.releasedate), fmtBytes(f.filesize)].filter(Boolean).join(' · ');
+            li.innerHTML =
+              '<div class="fw-top"><span class="fw-ver">iOS ' + (f.version || '?') +
+              '</span><span class="badge ok">SIGNED</span></div>' +
+              '<div class="fw-build">' + (f.buildid || '') + '</div>' +
+              (metaBits ? '<div class="fw-meta">' + metaBits + '</div>' : '') +
+              (f.url ? '<a href="' + f.url + '" rel="noopener noreferrer">IPSW</a>' : '');
+            fwList.appendChild(li);
+          }
+        }
+        renderTips(d, report.firmwareMeta, signed.length);
+      } else {
+        fwStatus.className = 'lead';
+        fwStatus.textContent =
+          'تعذر جلب قائمة التوقيع · Signing list unavailable' +
+          (report.firmwareMeta && report.firmwareMeta.error
+            ? ' (' + report.firmwareMeta.error + ')'
+            : '');
+        renderTips(d, report.firmwareMeta, 0);
+      }
+    }
+
     (async () => {
-      const status = document.getElementById('status');
+      const status = el('status');
       const params = new URLSearchParams(location.search);
       const err = params.get('error');
       if (err === 'parse') {
@@ -75,12 +276,12 @@
               : 'رمز غير صالح. أعد المحاولة من Safari.';
           return;
         }
-        status.textContent = 'تم الاستخراج بنجاح.';
-        document.getElementById('panel').classList.remove('hidden');
+        status.textContent = 'تم الاستخراج بنجاح · Extraction OK';
+        el('panel').classList.remove('hidden');
         for (const id of ['ecidHex', 'ecidDecimal', 'udid', 'product', 'version']) {
-          document.getElementById(id).textContent = data[id] || '—';
+          el(id).textContent = data[id] || '—';
         }
-        const note = document.getElementById('ecidNote');
+        const note = el('ecidNote');
         if (data.ecidSource === 'udid') {
           note.classList.remove('hidden');
           note.textContent = 'ملاحظة: iOS لم يُرجع مفتاح ECID في DeviceAttributes؛ تم اشتقاقه من الجزء بعد الشرطة في UDID (صيغة الأجهزة الحديثة CHIP-ECID).';
@@ -88,14 +289,26 @@
           note.classList.remove('hidden');
           note.textContent = 'المصدر: خاصية ECID من Profile Service.';
         }
+
+        try {
+          await loadReport(data);
+        } catch (_) {
+          el('fwStatus').className = 'lead';
+          el('fwStatus').textContent = 'تعذر تحميل تقرير الجهاز · Device report failed to load';
+          renderTips(
+            { build: null, ecidHex: data.ecidHex },
+            { ok: false },
+            0
+          );
+        }
       } catch (e) {
         status.textContent = 'تعذر تحميل النتيجة.';
       }
 
       document.querySelectorAll('[data-copy]').forEach((btn) => {
         btn.addEventListener('click', async () => {
-          const el = document.getElementById(btn.getAttribute('data-copy'));
-          const text = (el && el.textContent) || '';
+          const target = el(btn.getAttribute('data-copy'));
+          const text = (target && target.textContent) || '';
           if (!text || text === '—') return;
           try {
             await navigator.clipboard.writeText(text);

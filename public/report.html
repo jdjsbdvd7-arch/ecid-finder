@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Device Report · تقرير الجهاز</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>تقرير الجهاز · Device Report</h1>
+    <p class="lead">
+      صفحة مباشرة بمعاملات الرابط (بدون رمز Profile Service).
+      Direct link with query params — useful for demos.
+    </p>
+
+    <div id="panel" class="panel">
+      <div class="hero-device">
+        <div class="hero-icon" aria-hidden="true">📱</div>
+        <div>
+          <h2 id="marketingName">—</h2>
+          <p class="hero-sub" id="heroSub">جاري التحميل…</p>
+          <div class="badge-row" id="badges"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="label">ECID (hex)</span>
+        <code id="ecidHex" class="value">—</code>
+        <button type="button" data-copy="ecidHex">نسخ</button>
+      </div>
+      <div class="row">
+        <span class="label">ECID (decimal)</span>
+        <code id="ecidDecimal" class="value">—</code>
+        <button type="button" data-copy="ecidDecimal">نسخ</button>
+      </div>
+      <div class="row">
+        <span class="label">UDID</span>
+        <code id="udid" class="value">—</code>
+        <button type="button" data-copy="udid">نسخ</button>
+      </div>
+      <div class="row">
+        <span class="label">PRODUCT</span>
+        <code id="product" class="value">—</code>
+      </div>
+      <div class="row">
+        <span class="label">Build · VERSION</span>
+        <code id="version" class="value">—</code>
+      </div>
+      <div class="row">
+        <span class="label">Chip</span>
+        <code id="chip" class="value">—</code>
+      </div>
+
+      <section class="section">
+        <h2>تحليل رقم البناء · Build decode</h2>
+        <p id="buildSummary" class="lead"></p>
+        <p id="buildDetail" class="muted" style="font-size:0.88rem;line-height:1.5;margin:0"></p>
+      </section>
+
+      <section class="section">
+        <h2>إصدارات ما زالت موقّعة · Still signed</h2>
+        <p id="fwStatus" class="lead loading-dot">جاري الجلب</p>
+        <ul id="fwList" class="fw-list"></ul>
+      </section>
+
+      <section class="section">
+        <h2>نصائح · Tips</h2>
+        <ul id="tips" class="tips"></ul>
+        <p class="muted" style="font-size:0.78rem;margin-top:10px;line-height:1.45">
+          مساعد بحثي فقط · Research helper — not Apple-official, medical, or legal advice.
+        </p>
+      </section>
+    </div>
+
+    <a class="btn secondary" href="/">ECID Finder</a>
+  </main>
+  <script>
+    function el(id) { return document.getElementById(id); }
+    function fmtBytes(n) {
+      if (!n || !Number.isFinite(n)) return '';
+      const gb = n / (1024 ** 3);
+      return gb >= 1 ? gb.toFixed(2) + ' GB' : (n / (1024 ** 2)).toFixed(0) + ' MB';
+    }
+    function fmtDate(iso) {
+      if (!iso) return '';
+      try { return new Date(iso).toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' }); }
+      catch (_) { return iso; }
+    }
+
+    const params = new URLSearchParams(location.search);
+    const defaults = {
+      product: 'iPhone14,3',
+      udid: '00008110-001965E62213801E',
+      version: '24B5089g',
+      ecidHex: '1965e62213801e',
+      ecidDecimal: '',
+    };
+    const q = {
+      product: params.get('product') || defaults.product,
+      udid: params.get('udid') || defaults.udid,
+      version: params.get('version') || defaults.version,
+      ecidHex: params.get('ecidHex') || defaults.ecidHex,
+      ecidDecimal: params.get('ecidDecimal') || defaults.ecidDecimal,
+    };
+
+    (async () => {
+      el('ecidHex').textContent = q.ecidHex || '—';
+      el('ecidDecimal').textContent = q.ecidDecimal || '—';
+      el('udid').textContent = q.udid || '—';
+      el('product').textContent = q.product || '—';
+      el('version').textContent = q.version || '—';
+
+      try {
+        const res = await fetch('/api/device-report?' + new URLSearchParams(q), { cache: 'no-store' });
+        const report = await res.json();
+        const d = report.device || {};
+        el('marketingName').textContent = d.marketingName || q.product;
+        el('heroSub').textContent =
+          (d.product || q.product) +
+          (d.chip && d.chip.name ? ' · ' + d.chip.name : '') +
+          (d.version ? ' · ' + d.version : '');
+        el('chip').textContent = d.chip
+          ? d.chip.name + (d.chip.soc ? ' (' + d.chip.soc + ')' : '')
+          : '—';
+        if (!q.ecidDecimal && d.ecidDecimal) el('ecidDecimal').textContent = d.ecidDecimal;
+
+        const badges = el('badges');
+        badges.innerHTML = '';
+        const addBadge = (t, c) => {
+          const s = document.createElement('span');
+          s.className = 'badge' + (c ? ' ' + c : '');
+          s.textContent = t;
+          badges.appendChild(s);
+        };
+        if (d.chip && d.chip.name) addBadge(d.chip.name, 'chip');
+        if (d.build && d.build.ok) {
+          addBadge(d.build.kind === 'beta_or_seed' ? 'Beta / Seed' : 'Release-like',
+            d.build.kind === 'beta_or_seed' ? 'beta' : 'ok');
+          if (d.build.iosMajor) addBadge('iOS ~' + d.build.iosMajor);
+        }
+
+        if (d.build && d.build.ok) {
+          el('buildSummary').textContent = d.build.kindAr + ' · ' + d.build.iosHintAr;
+          el('buildDetail').textContent =
+            d.build.raw + ' · ' + d.build.trainHintEn + ' · ' + d.build.kindEn;
+        } else {
+          el('buildSummary').textContent = 'تعذر تفكيك البناء';
+        }
+
+        const fwStatus = el('fwStatus');
+        const fwList = el('fwList');
+        const tips = el('tips');
+        tips.innerHTML = '';
+        const tip = (ar, en, cls) => {
+          const li = document.createElement('li');
+          if (cls) li.className = cls;
+          li.innerHTML = '<div class="bilingual"><span>' + ar + '</span><span class="en">' + en + '</span></div>';
+          tips.appendChild(li);
+        };
+
+        if (report.firmwareMeta && report.firmwareMeta.ok) {
+          const signed = report.signedFirmwares || [];
+          fwStatus.className = 'lead';
+          if (!signed.length) {
+            fwStatus.textContent = 'لا إصدارات موقّعة حالياً في الرد';
+            tip('القائمة فارغة أو التوقيع متوقف مؤقتاً.', 'Empty signed list in API response.', 'warn-tip');
+          } else {
+            fwStatus.textContent = 'موقّع الآن: ' + signed.length + ' · Currently signed: ' + signed.length;
+            for (const f of signed) {
+              const li = document.createElement('li');
+              li.className = 'fw-item';
+              const meta = [fmtDate(f.releasedate), fmtBytes(f.filesize)].filter(Boolean).join(' · ');
+              li.innerHTML =
+                '<div class="fw-top"><span class="fw-ver">iOS ' + f.version +
+                '</span><span class="badge ok">SIGNED</span></div>' +
+                '<div class="fw-build">' + f.buildid + '</div>' +
+                (meta ? '<div class="fw-meta">' + meta + '</div>' : '') +
+                (f.url ? '<a href="' + f.url + '" rel="noopener noreferrer">IPSW</a>' : '');
+              fwList.appendChild(li);
+            }
+            tip('الاستعادة فقط لإصدار ما زال موقّعاً.', 'Restore only to a still-signed build.', 'ok-tip');
+          }
+        } else {
+          fwStatus.className = 'lead';
+          fwStatus.textContent = 'تعذر جلب التوقيع · Signing fetch failed';
+          tip('أعد المحاولة لاحقاً أو راجع ipsw.me.', 'Retry later or check ipsw.me.', 'warn-tip');
+        }
+
+        if (d.build && d.build.kind === 'beta_or_seed') {
+          tip('بناء تجريبي: توقّع عدم استقرار.', 'Beta/Seed build: expect instability.', 'warn-tip');
+        }
+        tip('احذف أي ملف تعريف مؤقت بعد الاستخدام.', 'Remove temporary profiles after use.', 'warn-tip');
+      } catch (e) {
+        el('heroSub').textContent = 'فشل التحميل';
+        el('fwStatus').textContent = 'خطأ في الشبكة أو الخادم';
+      }
+
+      document.querySelectorAll('[data-copy]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const target = el(btn.getAttribute('data-copy'));
+          const text = (target && target.textContent) || '';
+          if (!text || text === '—') return;
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'تم';
+            setTimeout(() => (btn.textContent = 'نسخ'), 1200);
+          } catch (_) {}
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
