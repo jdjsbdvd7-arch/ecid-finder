@@ -1,0 +1,10 @@
+{
+  "name": "ecid-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Safari Profile Service ECID finder (Apple OTA attribute request)",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/profile", "destination": "/api/profile" },
+    { "source": "/retrieve", "destination": "/api/retrieve" }
+  ],
+  "headers": [
+    {
+      "source": "/api/profile",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/api/retrieve",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
+}

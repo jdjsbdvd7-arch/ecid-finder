@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>نتيجة ECID</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>نتيجة الجهاز</h1>
+    <p id="status" class="lead">جاري التحقق من الرمز…</p>
+
+    <div id="panel" class="panel hidden">
+      <div class="row">
+        <span class="label">ECID (hex)</span>
+        <code id="ecidHex" class="value"></code>
+        <button type="button" data-copy="ecidHex">نسخ</button>
+      </div>
+      <div class="row">
+        <span class="label">ECID (decimal)</span>
+        <code id="ecidDecimal" class="value"></code>
+        <button type="button" data-copy="ecidDecimal">نسخ</button>
+      </div>
+      <div class="row">
+        <span class="label">UDID</span>
+        <code id="udid" class="value"></code>
+        <button type="button" data-copy="udid">نسخ</button>
+      </div>
+      <div class="row">
+        <span class="label">PRODUCT</span>
+        <code id="product" class="value"></code>
+      </div>
+      <div class="row">
+        <span class="label">VERSION</span>
+        <code id="version" class="value"></code>
+      </div>
+    </div>
+
+    <p class="warn">
+      احذف الملف المؤقت الآن: الإعدادات ← عام ← VPN وإدارة الجهاز.
+      الرمز ينتهي خلال دقائق ولا يُخزَّن في قاعدة بيانات.
+    </p>
+
+    <a class="btn secondary" href="/">عودة</a>
+  </main>
+  <script>
+    (async () => {
+      const status = document.getElementById('status');
+      const params = new URLSearchParams(location.search);
+      const t = params.get('t');
+      if (!t) {
+        status.textContent = 'لا يوجد رمز نتيجة. أعد التثبيت من الصفحة الرئيسية.';
+        return;
+      }
+      try {
+        const res = await fetch('/api/result?t=' + encodeURIComponent(t), {
+          cache: 'no-store',
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          status.textContent =
+            data.error === 'expired'
+              ? 'انتهت صلاحية الرمز. أعد تثبيت الملف المؤقت.'
+              : 'رمز غير صالح. أعد المحاولة من Safari.';
+          return;
+        }
+        status.textContent = 'تم الاستخراج بنجاح.';
+        document.getElementById('panel').classList.remove('hidden');
+        for (const id of ['ecidHex', 'ecidDecimal', 'udid', 'product', 'version']) {
+          document.getElementById(id).textContent = data[id] || '—';
+        }
+      } catch (e) {
+        status.textContent = 'تعذر تحميل النتيجة.';
+      }
+
+      document.querySelectorAll('[data-copy]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const el = document.getElementById(btn.getAttribute('data-copy'));
+          const text = (el && el.textContent) || '';
+          if (!text || text === '—') return;
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'تم';
+            setTimeout(() => (btn.textContent = 'نسخ'), 1200);
+          } catch (_) {}
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

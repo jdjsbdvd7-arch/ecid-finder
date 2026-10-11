@@ -1,0 +1,6 @@
+.node_modules
+.hmac_secret_local
+.vercel
+.env
+.env.*
+!.env.example
