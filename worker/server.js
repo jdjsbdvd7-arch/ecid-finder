@@ -29,6 +29,8 @@ const httpMod = require('http');
 const store = require('./jobs');
 const { runSigner, signerAvailable } = require('./signer-runner');
 
+// ani.stikstore.app (isideload's default) sits behind a Cloudflare challenge for datacenter IPs; ani.sidestore.io answered Apple-login probes from a Vercel Sandbox.
+const DEFAULT_ANISETTE_URL = 'https://ani.sidestore.io';
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const MAX_IPA_BYTES = Number(process.env.MAX_IPA_BYTES || 600 * 1024 * 1024);
@@ -375,7 +377,7 @@ async function handleSign(req, res, jid) {
       ipa: path.join(store.jobDir(jid), 'upload.ipa'),
       out: outPath,
       maxCerts: body.maxCerts === 'revoke' ? 'revoke' : 'error',
-      anisetteUrl: process.env.ANISETTE_URL || undefined,
+      anisetteUrl: process.env.ANISETTE_URL || DEFAULT_ANISETTE_URL,
       stateDir: store.ANISETTE_DIR,
     },
     onEvent

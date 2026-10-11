@@ -19,6 +19,8 @@ const { deriveUdid } = require('../lib/udid');
 const { inspectIpa } = require('../lib/ipa-inspect');
 const { installLink } = require('../lib/ota');
 const { runSigner, signerAvailable, signerBinary } = require('./signer-runner');
+// ani.stikstore.app (isideload's default) sits behind a Cloudflare challenge for datacenter IPs; ani.sidestore.io answered Apple-login probes from a Vercel Sandbox.
+const DEFAULT_ANISETTE_URL = 'https://ani.sidestore.io';
 
 function arg(name, def) {
   const i = process.argv.indexOf('--' + name);
@@ -67,7 +69,7 @@ async function main() {
   let result = null;
   let err = null;
   const runner = runSigner(
-    { email, password, udid: d.udid, deviceName: String(arg('name', 'ECID Finder device')), ipa: path.resolve(ipa), out, maxCerts: arg('revoke-certs') ? 'revoke' : 'error', anisetteUrl: process.env.ANISETTE_URL || undefined, stateDir },
+    { email, password, udid: d.udid, deviceName: String(arg('name', 'ECID Finder device')), ipa: path.resolve(ipa), out, maxCerts: arg('revoke-certs') ? 'revoke' : 'error', anisetteUrl: process.env.ANISETTE_URL || DEFAULT_ANISETTE_URL, stateDir },
     async (ev) => {
       if (ev.event === 'stage') console.log('→', ev.stage);
       else if (ev.event === 'team') console.log('  team:', ev.name, ev.teamId);
